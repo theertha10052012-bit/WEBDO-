@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Triggering Webhook Test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f0f11; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .box { background: #18181b; border: 1px solid #27272a; padding: 40px; border-radius: 16px; text-align: center; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+    h2 { color: #FFD60A; margin: 0 0 15px; }
+    p { font-size: 16px; line-height: 1.6; color: #a1a1aa; }
+    .status { background: #09090b; border: 1px solid #3f3f46; border-radius: 8px; padding: 15px; font-family: monospace; color: #4ade80; margin: 20px 0; font-size: 14px; }
+    .btn { background: #FFD60A; color: #000; border: none; padding: 12px 24px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 15px; }
+    .btn:hover { background: #ffe043; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>⚡ Triggering Test Webhook</h2>
+    <p>Target: <code>.../webhook-test/66687faa-3c2d-422f-a3c2-41c33410c397</code></p>
+    <div class="status" id="status">Sending POST request...</div>
+    <button class="btn" onclick="fire()">Send Again</button>
+  </div>
+
+  <script>
+    async function fire() {
+      const el = document.getElementById("status");
+      el.textContent = "Sending POST request...";
+      try {
+        const res = await fetch("https://api.agents.snsihub.ai/webhook-test/66687faa-3c2d-422f-a3c2-41c33410c397", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: "p1",
+            name: "Biscuits"
+          })
+        });
+        el.innerHTML = "✅ SUCCESS (HTTP " + res.status + ")!<br><br>Check your Workbench screen now — it received the event!";
+      } catch (err) {
+        el.textContent = "Error: " + err.message;
+      }
+    }
+    // Fire immediately on load
+    fire();
+  </script>
+</body>
+</html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#111111">
+  <title>WEBDO</title>
+
+  <!-- Tab icon: black square with a yellow square (also stops the browser asking for favicon.ico) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23111111'/%3E%3Crect x='4' y='4' width='8' height='8' fill='%23FFD60A'/%3E%3C/svg%3E">
+
+  <!-- Google Fonts: Space Grotesk, Inter, IBM Plex Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+  <!-- Our design file -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <span class="brand-name">WEBDO</span>
+      </div>
+
+      <nav aria-label="Main menu">
+        <ul class="menu-list">
+          <li><a class="menu-link" href="#dashboard"><span class="menu-label">Dashboard</span></a></li>
+          <li><a class="menu-link" href="#inventory"><span class="menu-label">Inventory</span></a></li>
+          <li><a class="menu-link" href="#add-stock"><span class="menu-label">Add Stock</span></a></li>
+          <li><a class="menu-link" href="#import-data"><span class="menu-label">Import Data</span></a></li>
+          <li>
+            <a class="menu-link" href="#low-stock">
+              <span class="menu-label">Low Stock Alerts</span>
+              <span class="menu-count" id="low-stock-count" hidden></span>
+            </a>
+          </li>
+          <li><a class="menu-link" href="#reorder"><span class="menu-label">Reorder Suggestions</span></a></li>
+          <li><a class="menu-link" href="#settings"><span class="menu-label">Settings</span></a></li>
+        </ul>
+      </nav>
+
+      <div class="user-profile-bar" id="user-profile-bar" hidden>
+        <span class="user-email-text" id="user-email-display">user@webdo.com</span>
+        <button class="btn btn-secondary btn-small" type="button" id="logout-btn" style="width: 100%;">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- MAIN AREA: one section is visible at a time -->
+    <main class="content">
+
+      <!-- DASHBOARD (drawn by renderDashboard in app.js) -->
+      <section class="view" id="section-dashboard" hidden>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="muted section-intro" id="dashboard-subtitle">Sample shop data</p>
+        <div class="card-grid" id="dashboard-cards"></div>
+        <p class="empty-state" id="dashboard-empty" hidden>No products yet. Add your first product in Inventory.</p>
+
+        <!-- STOCK HEALTH BAR -->
+        <section class="health-section" id="stock-health-section" hidden aria-label="Stock health">
+          <div class="health-header">
+            <h2 class="health-title">Stock health</h2>
+            <span class="health-label muted" id="health-label"></span>
+          </div>
+          <div class="health-bar" role="img" aria-label="Stock health bar">
+            <span class="health-seg health-seg-healthy" id="health-seg-healthy"></span>
+            <span class="health-seg health-seg-low"     id="health-seg-low"></span>
+            <span class="health-seg health-seg-out"     id="health-seg-out"></span>
+          </div>
+        </section>
+
+        <!-- BOTTOM ROW: Graph + Attention Panel side by side -->
+        <div class="dashboard-bottom-row" id="dashboard-bottom-row" hidden>
+
+          <!-- STOCK vs MINIMUM GRAPH -->
+          <section class="graph-section" aria-label="Stock vs minimum">
+            <div class="graph-header">
+              <h2 class="graph-title">Stock vs minimum</h2>
+              <span class="muted graph-scale" id="graph-scale"></span>
+            </div>
+            <div class="graph-body" id="graph-body"></div>
+            <div class="graph-legend">
+              <span class="legend-item"><span class="legend-swatch legend-swatch-healthy"></span>Healthy</span>
+              <span class="legend-item"><span class="legend-swatch legend-swatch-low"></span>Low</span>
+              <span class="legend-item"><span class="legend-swatch legend-swatch-out"></span>Out (no bar)</span>
+              <span class="legend-item"><span class="legend-swatch legend-swatch-min"></span>Minimum level</span>
+              <span class="legend-item legend-note">Labels show quantity / minimum</span>
+            </div>
+          </section>
+
+          <!-- NEEDS ATTENTION PANEL -->
+          <section class="attention-section" id="attention-panel" aria-label="Needs attention">
+            <div class="attention-header">
+              <h2 class="attention-title">Needs attention</h2>
+              <span class="muted" style="font-size:var(--text-sm);">Most urgent first</span>
+            </div>
+            <ul class="attention-list" id="attention-list"></ul>
+            <div class="attention-footer" id="attention-footer" hidden>
+              <span>Total to reorder</span>
+              <span class="attention-total num" id="attention-total"></span>
+            </div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- INVENTORY (drawn by renderInventory in app.js) -->
+      <section class="view" id="section-inventory" hidden>
+        <h1 class="page-title">Inventory</h1>
+        <p class="muted section-intro">All your products. Search by name or barcode, or filter by category.</p>
+
+        <div class="toolbar">
+          <div class="toolbar-search">
+            <label class="visually-hidden" for="inventory-search">Search by product name or barcode</label>
+            <input class="input" type="search" id="inventory-search" placeholder="Search name or barcode" autocomplete="off">
+          </div>
+
+          <div class="toolbar-category">
+            <label class="visually-hidden" for="inventory-category">Filter by category</label>
+            <select class="input" id="inventory-category">
+              <option value="">All categories</option>
+            </select>
+          </div>
+
+          <button class="btn toolbar-add" type="button" id="add-product-btn">+ Add Product</button>
+        </div>
+
+        <div class="table-wrap" id="inventory-table-wrap" tabindex="0" role="region" aria-label="Inventory table" hidden>
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Product Name</th>
+                <th scope="col">Category</th>
+                <th scope="col" class="col-num">Quantity</th>
+                <th scope="col" class="col-num">Minimum</th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-body"></tbody>
+          </table>
+        </div>
+
+        <p class="empty-state" id="inventory-empty" hidden></p>
+      </section>
+
+      <!-- ADD STOCK (logic is in section 8 of app.js) -->
+      <section class="view" id="section-add-stock" hidden>
+        <h1 class="page-title">Add Stock</h1>
+        <p class="muted section-intro">Find a product in one of three ways, then enter how many units arrived.</p>
+
+        <div class="stock-layout">
+
+          <!-- Left: the three ways to find a product -->
+          <div class="stock-methods">
+
+            <section class="stock-method" aria-labelledby="method-camera-title">
+              <h2 class="stock-method-title" id="method-camera-title">Scan with camera</h2>
+              <p class="stock-method-text">Reads EAN-13, UPC and QR codes.</p>
+
+              <div id="camera-select-wrap" style="margin-bottom: 10px;" hidden>
+                <label class="field-label" for="camera-select" style="font-size: 13px;">Select Camera Device</label>
+                <select class="input" id="camera-select" style="font-size: 13px;"></select>
+              </div>
+
+              <div class="scanner-view" id="scanner-view"></div>
+              <p class="scanner-message" id="scanner-message" role="status">Camera is off.</p>
+              <div class="method-actions">
+                <button class="btn" type="button" id="scanner-start">Start camera</button>
+                <button class="btn btn-secondary" type="button" id="scanner-stop" disabled>Stop camera</button>
+              </div>
+            </section>
+
+            <section class="stock-method" aria-labelledby="method-type-title">
+              <h2 class="stock-method-title" id="method-type-title">Type barcode</h2>
+              <form id="barcode-form" novalidate>
+                <label class="field-label" for="barcode-input">Barcode number</label>
+                <div class="lookup-row">
+                  <input class="input input-num" type="text" id="barcode-input" maxlength="40" autocomplete="off" aria-describedby="lookup-error">
+                  <button class="btn" type="submit">Find</button>
+                </div>
+                <p class="field-error" id="lookup-error" hidden></p>
+              </form>
+            </section>
+
+            <section class="stock-method" aria-labelledby="method-list-title">
+              <h2 class="stock-method-title" id="method-list-title">Choose from list</h2>
+              <p class="stock-method-text">For products that have no barcode.</p>
+              <label class="field-label" for="stock-product-select">Product</label>
+              <select class="input" id="stock-product-select">
+                <option value="">Choose a product</option>
+              </select>
+            </section>
+
+          </div>
+
+          <!-- Right: the result -->
+          <div class="stock-side">
+            <p class="stock-idle" id="stock-idle">Find a product and it will appear here.</p>
+
+            <p class="notice" id="stock-notice" role="status" hidden></p>
+
+            <div class="stock-card" id="stock-found" hidden>
+              <h2 class="stock-name" id="stock-name"></h2>
+
+              <dl class="stat-list">
+                <div>
+                  <dt class="stat-label">Category</dt>
+                  <dd class="stat-value stat-value-text" id="stock-category"></dd>
+                </div>
+                <div>
+                  <dt class="stat-label">Current quantity</dt>
+                  <dd class="stat-value" id="stock-quantity"></dd>
+                </div>
+              </dl>
+
+              <form id="stock-form" novalidate>
+                <div class="field">
+                  <label class="field-label">Action</label>
+                  <div class="stock-action-tabs" style="display: flex; gap: 8px; margin-bottom: 12px;">
+                    <button type="button" class="btn btn-small" id="stock-mode-add" style="flex: 1;">+ Add Stock</button>
+                    <button type="button" class="btn btn-secondary btn-small" id="stock-mode-reduce" style="flex: 1;">- Reduce Stock</button>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" id="stock-units-label" for="stock-units">Units to add</label>
+                  <input class="input input-num stock-units" type="text" id="stock-units" inputmode="numeric" maxlength="5" value="1" autocomplete="off" aria-describedby="error-units">
+                  <p class="field-error" id="error-units" hidden></p>
+                </div>
+                <button class="btn" type="submit" id="stock-confirm">Confirm</button>
+              </form>
+            </div>
+
+            <div class="stock-card" id="stock-missing" hidden>
+              <p class="stock-missing-title">No product with this barcode.</p>
+              <p class="num" id="missing-barcode"></p>
+              <button class="btn" type="button" id="add-new-product-btn">Add as new product</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- IMPORT DATA (logic is in section 9 of app.js) -->
+      <section class="view" id="section-import-data" hidden>
+        <h1 class="page-title">Import Data</h1>
+        <p class="muted section-intro">Add or update many products at once from a CSV file. The first row must be the header: name, category, barcode, quantity, minimum, target.</p>
+
+        <div class="panel">
+          <h2 class="panel-title">Choose a file</h2>
+          <p class="panel-text">Only .csv files up to 1 MB. Columns must be separated by commas. In Excel, save as "CSV UTF-8".</p>
+
+          <div class="import-controls">
+            <div class="import-file">
+              <label class="field-label" for="import-file">CSV file</label>
+              <input class="input file-input" type="file" id="import-file" accept=".csv" aria-describedby="import-error">
+            </div>
+            <button class="btn btn-secondary" type="button" id="download-sample-btn">Download sample CSV</button>
+          </div>
+
+          <p class="field-error" id="import-error" role="alert" hidden></p>
+
+          <p class="panel-text import-rules">
+            If a barcode already exists, that product is updated. If a row has no barcode, it is matched by product name (upper or lower case does not matter). Otherwise a new product is added.
+          </p>
+        </div>
+
+        <p class="notice" id="import-notice" role="status" hidden></p>
+
+        <p class="empty-state" id="import-empty">Choose a CSV file to see a preview. Nothing is imported until you click "Import valid rows".</p>
+
+        <div class="import-preview" id="import-preview" hidden>
+
+          <div class="panel">
+            <h2 class="panel-title">Preview</h2>
+            <p class="panel-text" id="import-file-name"></p>
+
+            <dl class="stat-list import-stats">
+              <div>
+                <dt class="stat-label">Valid rows</dt>
+                <dd class="stat-value" id="import-count-valid"></dd>
+              </div>
+              <div>
+                <dt class="stat-label">Invalid rows</dt>
+                <dd class="stat-value" id="import-count-invalid"></dd>
+              </div>
+              <div>
+                <dt class="stat-label">Will be added</dt>
+                <dd class="stat-value" id="import-count-add"></dd>
+              </div>
+              <div>
+                <dt class="stat-label">Will be updated</dt>
+                <dd class="stat-value" id="import-count-update"></dd>
+              </div>
+            </dl>
+
+            <button class="btn" type="button" id="import-run-btn" disabled>Import valid rows</button>
+          </div>
+
+          <div class="panel" id="import-invalid-panel" hidden>
+            <h2 class="panel-title">Rows with problems</h2>
+            <p class="panel-text">These rows will be skipped. Fix them in the file and choose it again.</p>
+            <ul class="invalid-list" id="import-invalid-list" tabindex="0" aria-label="Rows with problems"></ul>
+          </div>
+
+          <div>
+            <h2 class="panel-title">First rows of the file</h2>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Import preview table">
+              <table class="table table-wide">
+                <thead>
+                  <tr>
+                    <th scope="col" class="col-num">Row</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Category</th>
+                    <th scope="col">Barcode</th>
+                    <th scope="col" class="col-num">Quantity</th>
+                    <th scope="col" class="col-num">Minimum</th>
+                    <th scope="col" class="col-num">Target</th>
+                    <th scope="col">Result</th>
+                  </tr>
+                </thead>
+                <tbody id="import-table-body"></tbody>
+              </table>
+            </div>
+            <p class="panel-text import-table-note" id="import-table-note"></p>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- LOW STOCK ALERTS (drawn by renderLowStock in app.js) -->
+      <section class="view" id="section-low-stock" hidden>
+        <h1 class="page-title">Low Stock Alerts</h1>
+        <p class="muted section-intro">Products that are Low or Out of stock. The most urgent are at the top.</p>
+        <ul class="alert-list" id="low-stock-list"></ul>
+        <p class="empty-state" id="low-stock-empty" hidden>All stock levels are healthy.</p>
+      </section>
+
+      <!-- REORDER SUGGESTIONS (drawn by renderReorder in app.js) -->
+      <section class="view" id="section-reorder" hidden>
+        <h1 class="page-title">Reorder Suggestions</h1>
+        <p class="section-intro">
+          Suggested order = Target stock minus Current stock.
+          <span class="muted">The Reorder button is a demo and does not place any order.</span>
+        </p>
+        <div class="reorder-grid" id="reorder-grid"></div>
+        <p class="empty-state" id="reorder-empty" hidden>Nothing to reorder right now.</p>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="section-settings" hidden>
+        <h1 class="page-title">Settings</h1>
+        <p class="muted section-intro">Manage the data saved in this browser.</p>
+
+        <div class="panel">
+          <h2 class="panel-title">Sample data</h2>
+          <p class="panel-text">Delete all your products and changes, and restore the 7 sample products.</p>
+          <button class="btn" type="button" id="reset-data-btn">Reset sample data</button>
+        </div>
+
+        <p class="notice" id="settings-notice" role="status" hidden></p>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ======================================================
+       PRODUCT FORM POPUP (Add and Edit)
+       Opened by openProductForm() in app.js
+       ====================================================== -->
+  <dialog class="dialog" id="product-dialog" aria-labelledby="product-dialog-title">
+    <form class="dialog-form" id="product-form" novalidate>
+      <h2 class="dialog-title" id="product-dialog-title">Add Product</h2>
+
+      <div class="field">
+        <label class="field-label" for="product-name">Product Name</label>
+        <input class="input" type="text" id="product-name" name="name" maxlength="80" autocomplete="off" aria-describedby="error-name">
+        <p class="field-error" id="error-name" hidden></p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="product-category">Category</label>
+        <input class="input" type="text" id="product-category" name="category" list="category-suggestions" maxlength="40" autocomplete="off" aria-describedby="error-category">
+        <datalist id="category-suggestions"></datalist>
+        <p class="field-error" id="error-category" hidden></p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="product-barcode">Barcode <span class="field-optional">(optional)</span></label>
+        <input class="input input-num" type="text" id="product-barcode" name="barcode" maxlength="40" autocomplete="off" aria-describedby="error-barcode">
+        <p class="field-error" id="error-barcode" hidden></p>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" for="product-quantity">Current Quantity</label>
+          <input class="input input-num" type="text" id="product-quantity" name="quantity" inputmode="numeric" maxlength="9" autocomplete="off" aria-describedby="error-quantity">
+          <p class="field-error" id="error-quantity" hidden></p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="product-minimum">Minimum Stock</label>
+          <input class="input input-num" type="text" id="product-minimum" name="minimum" inputmode="numeric" maxlength="9" autocomplete="off" aria-describedby="error-minimum">
+          <p class="field-error" id="error-minimum" hidden></p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="product-target">Target Stock</label>
+          <input class="input input-num" type="text" id="product-target" name="target" inputmode="numeric" maxlength="9" autocomplete="off" aria-describedby="error-target">
+          <p class="field-error" id="error-target" hidden></p>
+        </div>
+      </div>
+
+      <p class="dialog-note">Minimum: stock at or below this number is Low. Target: the stock level a reorder should bring you back up to.</p>
+
+      <p class="field-error" id="product-form-error" role="alert" hidden></p>
+
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" type="button" id="product-cancel">Cancel</button>
+        <button class="btn" type="submit" id="product-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ======================================================
+       CONFIRMATION POPUP (used for Delete and Reset)
+       Opened by askConfirmation() in app.js
+       ====================================================== -->
+  <dialog class="dialog dialog-narrow" id="confirm-dialog" aria-labelledby="confirm-title">
+    <form class="dialog-form" method="dialog">
+      <h2 class="dialog-title" id="confirm-title">Confirm</h2>
+      <p class="dialog-text" id="confirm-message"></p>
+
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" type="submit" value="cancel" autofocus>Cancel</button>
+        <button class="btn btn-dark" type="submit" value="confirm" id="confirm-yes">Delete</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- TOAST: short confirmation message -->
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- LOGIN SCREEN OVERLAY -->
+  <div class="login-screen" id="login-screen">
+    <div class="login-card">
+      <div class="brand login-brand">
+        <span class="brand-mark"></span>
+        <span class="brand-name">WEBDO</span>
+      </div>
+      <h1 class="login-title">Staff Sign In</h1>
+      <p class="login-subtitle">Sign in with your Supabase account to manage inventory.</p>
+
+      <form id="login-form" novalidate>
+        <div class="field">
+          <label class="field-label" for="login-email">Email Address</label>
+          <input class="input" type="email" id="login-email" placeholder="staff@webdo.com" required autocomplete="username">
+        </div>
+
+        <div class="field" style="margin-top: 12px;">
+          <label class="field-label" for="login-password">Password</label>
+          <input class="input" type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+
+        <p class="field-error" id="login-error" hidden style="margin-top: 12px;"></p>
+        <p class="notice notice-success" id="login-success" hidden style="margin-top: 12px;"></p>
+
+        <div class="login-actions" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+          <button class="btn" type="submit" id="login-submit-btn" style="width: 100%; justify-content: center;">Sign In</button>
+          <button class="btn btn-secondary" type="button" id="login-signup-btn" style="width: 100%; justify-content: center;">Create Account</button>
+          <button class="btn btn-small" type="button" id="login-demo-btn" style="width: 100%; justify-content: center; background: transparent; border: 1px dashed #555; color: #aaa; margin-top: 6px;">⚡ Quick Demo / Guest Access</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Camera scanning library (needs internet). If it fails to load, the app still works
+       and the camera section shows a message. -->
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <!-- Our scripts: storage first, then logic, then app -->
+  <script src="js/storage.js"></script>
+  <script src="js/logic.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
