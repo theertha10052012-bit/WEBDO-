@@ -1356,11 +1356,28 @@ function updateScannerButtons() {
   document.getElementById("scanner-stop").disabled = !isScannerRunning;
 }
 
-// Which codes the camera reads: EAN-13, UPC (A and E) and QR.
+// Which codes the camera reads.
+// Covers all common retail, warehouse and inventory barcode types.
 // This is a function (not a constant) so the page still works if the library did not load.
 function getScanFormats() {
-  const formats = Html5QrcodeSupportedFormats;
-  return [formats.EAN_13, formats.UPC_A, formats.UPC_E, formats.QR_CODE];
+  const f = Html5QrcodeSupportedFormats;
+  return [
+    // 1-D linear barcodes
+    f.EAN_13,       // Global retail (most packaged goods)
+    f.EAN_8,        // Small packaging (short EAN)
+    f.UPC_A,        // US retail (12-digit, like your image)
+    f.UPC_E,        // Compact UPC for small items
+    f.CODE_128,     // Warehouses, shipping labels — variable length
+    f.CODE_39,      // Automotive, defence, hand-labelled stock
+    f.CODE_93,      // Compact alphanumeric (some retailers)
+    f.ITF,          // Interleaved 2-of-5: outer cartons & pallets
+    f.CODABAR,      // Libraries, blood banks, some old stock systems
+    // 2-D matrix codes
+    f.QR_CODE,      // General purpose, URLs
+    f.DATA_MATRIX,  // Electronics, medical devices
+    f.PDF_417,      // Shipping labels, ID cards
+    f.AZTEC,        // Transport tickets
+  ];
 }
 
 // Turns a camera error into a clear message

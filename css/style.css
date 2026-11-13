@@ -63,8 +63,31 @@ body {
   font-size: var(--text-base);
   line-height: 1.5;
   color: var(--black);
-  background: var(--off-white);
+  background: var(--off-white);    /* fallback colour shown before canvas initialises */
   overflow-wrap: break-word;       /* very long words break instead of pushing the page sideways */
+}
+
+/* Background hover-animation canvas – sits behind all UI, never captures events */
+#bg-hover-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Once the canvas is active it becomes the background — hide the body colour
+   so we don't get a seam. The canvas itself renders the off-white base. */
+body:has(#bg-hover-canvas) {
+  background: transparent;
+}
+
+/* Everything inside .app must render above the canvas */
+.app {
+  position: relative;
+  z-index: 1;
 }
 
 h1,
@@ -396,7 +419,7 @@ h3 { font-size: clamp(1.05rem, 1.4vw + 0.3rem, var(--text-lg)); }
 .content {
   min-width: 0;                    /* stops wide content from pushing the layout */
   padding: var(--space-7);
-  background: var(--off-white);
+  background: transparent;         /* let the WebGL canvas show through */
 }
 
 .view {
