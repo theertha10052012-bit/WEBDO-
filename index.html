@@ -26,8 +26,35 @@
     <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark"></span>
-        <span class="brand-name">WEBDO</span>
+        <div style="display: flex; align-items: center; gap: var(--space-3);">
+          <span class="brand-mark"></span>
+          <span class="brand-name">WEBDO</span>
+        </div>
+
+        <!-- Notification Bell Trigger -->
+        <div class="notif-wrapper" style="margin-left: auto; position: relative;">
+          <button type="button" class="notif-bell-btn" id="notif-bell-btn" aria-label="Notifications" title="Stock notifications" style="background: none; border: none; cursor: pointer; color: var(--white); display: flex; align-items: center; justify-content: center; position: relative; width: 34px; height: 34px; border-radius: var(--radius); transition: background 0.15s ease;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span class="notif-badge" id="notif-badge" hidden style="position: absolute; top: 2px; right: 2px; background: #FF3B30; color: #fff; font-size: 10px; font-weight: 700; height: 16px; min-width: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid var(--black);">0</span>
+          </button>
+
+          <!-- Notification Dropdown Panel -->
+          <div class="notif-dropdown" id="notif-dropdown" hidden style="position: fixed; top: 58px; left: 16px; width: 330px; max-width: calc(100vw - 32px); background: var(--white); border: 1px solid var(--black); border-radius: var(--radius); box-shadow: 0 12px 32px rgba(0,0,0,0.3); z-index: 99999; color: var(--black); overflow: hidden;">
+            <div class="notif-header" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--off-white);">
+              <span style="font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Stock Alerts</span>
+              <button type="button" id="notif-enable-browser" style="background: none; border: none; color: #0066cc; font-size: 11px; cursor: pointer; text-decoration: underline;">Enable Browser Alerts</button>
+            </div>
+            <div class="notif-body" id="notif-list" style="max-height: 320px; overflow-y: auto; overscroll-behavior: contain;">
+              <!-- Dynamic alert items -->
+            </div>
+            <div class="notif-footer" style="padding: 10px 14px; text-align: center; border-top: 1px solid var(--line); background: #fafafa;">
+              <a href="#low-stock" id="notif-view-all" style="font-size: 12px; font-weight: 600; color: var(--black); text-decoration: underline;">View all low stock alerts &rarr;</a>
+            </div>
+          </div>
+        </div>
       </div>
 
       <nav aria-label="Main menu">
@@ -431,6 +458,58 @@
   </dialog>
 
   <!-- ======================================================
+       REORDER ORDER POPUP
+       Opened when clicking "Reorder" on a product
+       ====================================================== -->
+  <dialog class="dialog" id="reorder-dialog" aria-labelledby="reorder-dialog-title">
+    <form class="dialog-form" id="reorder-form" novalidate>
+      <h2 class="dialog-title" id="reorder-dialog-title">Create Reorder Request</h2>
+
+      <div class="field">
+        <label class="field-label" for="reorder-product-name">Product Name</label>
+        <input class="input" type="text" id="reorder-product-name" readonly style="background-color: var(--gray); cursor: not-allowed; font-weight: 600;">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" for="reorder-quantity">Order Quantity</label>
+          <input class="input input-num" type="text" id="reorder-quantity" name="quantity" inputmode="numeric" maxlength="7" autocomplete="off" aria-describedby="reorder-error-quantity">
+          <p class="field-error" id="reorder-error-quantity" hidden></p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="reorder-supplier-name">Supplier Name <span class="field-optional">(optional)</span></label>
+          <input class="input" type="text" id="reorder-supplier-name" name="supplierName" maxlength="80" autocomplete="off" placeholder="e.g. Acme Supplies">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="reorder-supplier-email">Supplier Email <span class="field-optional">(optional)</span></label>
+        <input class="input" type="email" id="reorder-supplier-email" name="supplierEmail" maxlength="100" autocomplete="off" placeholder="orders@supplier.com" aria-describedby="reorder-error-email">
+        <p class="field-error" id="reorder-error-email" hidden></p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="reorder-note">Note <span class="field-optional">(optional)</span></label>
+        <textarea class="input" id="reorder-note" name="note" rows="2" maxlength="300" placeholder="e.g. Please deliver by Friday." style="resize: vertical; font-family: inherit; font-size: var(--text-sm); line-height: 1.4;"></textarea>
+      </div>
+
+      <div class="field" style="margin-top: var(--space-4);">
+        <label class="field-label" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Message Preview</span>
+          <span style="font-weight: 400; font-size: 11px; color: var(--gray-text);">Auto-generated</span>
+        </label>
+        <div id="reorder-message-preview" style="background: var(--off-white); border: 1px dashed var(--line); border-radius: var(--radius); padding: var(--space-3); font-size: var(--text-sm); line-height: 1.5; color: var(--black); white-space: pre-wrap; font-family: var(--font-body);"></div>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" type="button" id="reorder-cancel">Cancel</button>
+        <button class="btn" type="submit" id="reorder-submit">Place Order</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ======================================================
        CONFIRMATION POPUP (used for Delete and Reset)
        Opened by askConfirmation() in app.js
        ====================================================== -->
@@ -449,34 +528,53 @@
   <!-- TOAST: short confirmation message -->
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-  <!-- LOGIN SCREEN OVERLAY -->
+  <!-- LOGIN / REGISTER SCREEN OVERLAY -->
   <div class="login-screen" id="login-screen">
     <div class="login-card">
       <div class="brand login-brand">
         <span class="brand-mark"></span>
         <span class="brand-name">WEBDO</span>
       </div>
-      <h1 class="login-title">Staff Sign In</h1>
-      <p class="login-subtitle">Sign in with your Supabase account to manage inventory.</p>
+
+      <!-- Segmented Tab switcher for Sign In / Create Account -->
+      <div class="login-tabs" style="display: flex; border-bottom: 2px solid var(--line); margin-bottom: var(--space-4);">
+        <button type="button" id="tab-signin" class="login-tab-btn active" style="flex: 1; padding: 10px; background: none; border: none; font-weight: 600; font-size: var(--text-base); cursor: pointer; border-bottom: 2px solid var(--black); margin-bottom: -2px;">Sign In</button>
+        <button type="button" id="tab-signup" class="login-tab-btn" style="flex: 1; padding: 10px; background: none; border: none; font-weight: 500; font-size: var(--text-base); color: var(--gray-text); cursor: pointer; margin-bottom: -2px;">Create Account</button>
+      </div>
+
+      <h1 class="login-title" id="login-title">Welcome back</h1>
+      <p class="login-subtitle" id="login-subtitle">Enter your credentials to access your inventory.</p>
 
       <form id="login-form" novalidate>
         <div class="field">
           <label class="field-label" for="login-email">Email Address</label>
-          <input class="input" type="email" id="login-email" placeholder="staff@webdo.com" required autocomplete="username">
+          <input class="input" type="email" id="login-email" placeholder="name@example.com" required autocomplete="username">
         </div>
 
-        <div class="field" style="margin-top: 12px;">
-          <label class="field-label" for="login-password">Password</label>
+        <div class="field" style="margin-top: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <label class="field-label" for="login-password">Password</label>
+          </div>
           <input class="input" type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+
+        <!-- Confirm Password (shown only on Create Account tab) -->
+        <div class="field" id="field-confirm-password-wrap" style="margin-top: 14px;" hidden>
+          <label class="field-label" for="login-confirm-password">Confirm Password</label>
+          <input class="input" type="password" id="login-confirm-password" placeholder="Re-enter your password" autocomplete="new-password">
         </div>
 
         <p class="field-error" id="login-error" hidden style="margin-top: 12px;"></p>
         <p class="notice notice-success" id="login-success" hidden style="margin-top: 12px;"></p>
 
-        <div class="login-actions" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
-          <button class="btn" type="submit" id="login-submit-btn" style="width: 100%; justify-content: center;">Sign In</button>
-          <button class="btn btn-secondary" type="button" id="login-signup-btn" style="width: 100%; justify-content: center;">Create Account</button>
-          <button class="btn btn-small" type="button" id="login-demo-btn" style="width: 100%; justify-content: center; background: transparent; border: 1px dashed #555; color: #aaa; margin-top: 6px;">⚡ Quick Demo / Guest Access</button>
+        <div class="login-actions" style="display: flex; flex-direction: column; gap: 12px; margin-top: 22px;">
+          <button class="btn" type="submit" id="login-submit-btn" style="width: 100%; justify-content: center; height: 42px;">Sign In</button>
+          
+          <!-- Helper switcher link -->
+          <p style="text-align: center; font-size: var(--text-sm); color: var(--gray-text); margin-top: 4px;">
+            <span id="login-switch-prompt">Don't have an account?</span>
+            <button type="button" id="login-switch-btn" style="background: none; border: none; color: var(--black); font-weight: 600; cursor: pointer; text-decoration: underline; margin-left: 4px;">Create new account</button>
+          </p>
         </div>
       </form>
     </div>

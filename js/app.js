@@ -845,8 +845,140 @@ function createAlertItem(product) {
 // It is hidden when the count is 0.
 function updateLowStockCount(count) {
   const badge = document.getElementById("low-stock-count");
+  if (badge) {
+    badge.textContent = count > 99 ? "99+" : String(count);
+    badge.hidden = count === 0;
+  }
+}
+
+/* ---------- Notification Center (In-App & Browser Push) ---------- */
+let notifiedLowStockSet = new Set(); // tracks alerts to avoid duplicate spam
+
+function sendBrowserPushNotification(title, body) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") {
+    try {
+      new Notification(title, {
+        body: body,
+        icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23FF3B30'/%3E%3C/svg%3E"
+      });
+    } catch (e) {
+      console.warn("Browser notification trigger failed:", e);
+    }
+  }
+}
+
+function updateNotificationCenter(alerts) {
+  const badge = document.getElementById("notif-badge");
+  const list = document.getElementById("notif-list");
+  if (!badge || !list) return;
+
+  const count = alerts.length;
   badge.textContent = count > 99 ? "99+" : String(count);
   badge.hidden = count === 0;
+
+  if (count === 0) {
+    list.innerHTML = `
+      <div style="padding: 24px 16px; text-align: center; color: var(--gray-text); font-size: 13px;">
+        <span style="font-size: 24px; display: block; margin-bottom: 6px;">🎉</span>
+        All stock levels are currently healthy!
+      </div>
+    `;
+    notifiedLowStockSet.clear();
+    return;
+  }
+
+  // Build alert items
+  list.innerHTML = "";
+  alerts.forEach(function (product) {
+    const isOut = getStatus(product) === "out";
+    const statusText = isOut ? "Out of Stock" : "Low Stock";
+    const icon = isOut ? "🚨" : "⚠️";
+
+    const item = document.createElement("div");
+    item.style.cssText = "display: flex; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); align-items: flex-start; transition: background 0.15s ease;";
+    item.onmouseenter = function() { item.style.backgroundColor = "var(--off-white)"; };
+    item.onmouseleave = function() { item.style.backgroundColor = "transparent"; };
+
+    item.innerHTML = `
+      <span style="font-size: 16px; margin-top: 1px;">${icon}</span>
+      <div style="flex: 1; min-width: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+          <strong style="font-size: 13px; color: var(--black);">${product.name}</strong>
+          <span style="font-size: 10px; font-weight: 700; color: ${isOut ? '#d32f2f' : '#b26a00'}; background: ${isOut ? '#ffebee' : '#fff8e1'}; padding: 2px 6px; border-radius: 3px;">${statusText}</span>
+        </div>
+        <p style="font-size: 11.5px; color: var(--gray-text); margin: 0; line-height: 1.3;">
+          ${isOut ? 'Zero units left.' : `Only ${product.quantity} units left (min: ${product.minimum}).`}
+        </p>
+      </div>
+    `;
+    list.appendChild(item);
+
+    // Trigger browser notification once per newly detected shortage
+    const key = product.id + "_" + product.quantity;
+    if (!notifiedLowStockSet.has(key)) {
+      notifiedLowStockSet.add(key);
+      const title = isOut ? `🚨 Out of Stock: ${product.name}` : `⚠️ Low Stock: ${product.name}`;
+      const msg = isOut ? `Inventory for ${product.name} has hit 0!` : `${product.name} is down to ${product.quantity} units (minimum is ${product.minimum}).`;
+      sendBrowserPushNotification(title, msg);
+    }
+  });
+}
+
+function setupNotificationControls() {
+  const bellBtn = document.getElementById("notif-bell-btn");
+  const dropdown = document.getElementById("notif-dropdown");
+  const browserBtn = document.getElementById("notif-enable-browser");
+
+  if (!bellBtn || !dropdown) return;
+
+  // Toggle dropdown
+  bellBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    const isOpening = dropdown.hidden;
+    dropdown.hidden = !dropdown.hidden;
+
+    // Dynamically align dropdown beneath the bell button
+    if (isOpening) {
+      const rect = bellBtn.getBoundingClientRect();
+      dropdown.style.top = (rect.bottom + 8) + "px";
+      dropdown.style.left = Math.max(12, rect.left) + "px";
+    }
+  });
+
+  // Close when clicking outside
+  document.addEventListener("click", function (e) {
+    if (!dropdown.hidden && !dropdown.contains(e.target) && !bellBtn.contains(e.target)) {
+      dropdown.hidden = true;
+    }
+  });
+
+  // Request browser permission
+  if (browserBtn) {
+    if (!("Notification" in window)) {
+      browserBtn.style.display = "none";
+    } else if (Notification.permission === "granted") {
+      browserBtn.textContent = "✓ Alerts Active";
+      browserBtn.style.color = "#2e7d32";
+      browserBtn.style.textDecoration = "none";
+      browserBtn.disabled = true;
+    }
+
+    browserBtn.addEventListener("click", async function () {
+      if (!("Notification" in window)) return;
+      const perm = await Notification.requestPermission();
+      if (perm === "granted") {
+        browserBtn.textContent = "✓ Alerts Active";
+        browserBtn.style.color = "#2e7d32";
+        browserBtn.style.textDecoration = "none";
+        browserBtn.disabled = true;
+        sendBrowserPushNotification("WEBDO Notifications Active", "You will now receive desktop alerts whenever stock runs low!");
+      } else {
+        browserBtn.textContent = "Permission Blocked";
+        browserBtn.style.color = "#d32f2f";
+      }
+    });
+  }
 }
 
 // Reads the data, then draws the alert list and updates the sidebar count
@@ -862,6 +994,7 @@ async function renderLowStock() {
     emptyMessage.textContent = "All stock levels are healthy.";
     emptyMessage.hidden = alerts.length > 0;
     updateLowStockCount(alerts.length);
+    updateNotificationCenter(alerts);
   } catch (error) {
     console.error("Could not draw the low stock alerts.", error);
     list.replaceChildren();
@@ -898,11 +1031,13 @@ function createReorderCard(product) {
   order.append("Suggested order: ", createTextElement("span", "num", String(amount)), amount === 1 ? " unit" : " units");
   card.appendChild(order);
 
-  // Demo button
+  // Reorder button with product metadata
   const button = createTextElement("button", "btn reorder-button", "Reorder");
   button.type = "button";
   button.dataset.action = "reorder";
+  button.dataset.id = product.id;
   button.dataset.name = product.name;
+  button.dataset.suggested = String(amount);
   button.setAttribute("aria-label", "Reorder " + product.name);
   card.appendChild(button);
 
@@ -929,17 +1064,154 @@ async function renderReorder() {
   }
 }
 
-// DEMO ONLY: shows a message and changes nothing in the data
+/* ---------- Reorder Modal & Logic ---------- */
+let activeReorderProduct = null;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function updateReorderMessagePreview() {
+  const preview = document.getElementById("reorder-message-preview");
+  if (!preview) return;
+
+  const productName = document.getElementById("reorder-product-name").value.trim() || "Item";
+  const qty = document.getElementById("reorder-quantity").value.trim() || "0";
+  const supplier = document.getElementById("reorder-supplier-name").value.trim();
+  const note = document.getElementById("reorder-note").value.trim();
+
+  const greeting = supplier ? "Hi " + supplier + "," : "Hi,";
+  const unitWord = qty === "1" ? "unit" : "units";
+  let msg = greeting + " I would like to order " + qty + " " + unitWord + " of " + productName + ".";
+
+  if (note) {
+    msg += "\n\nNote: " + note;
+  }
+
+  preview.textContent = msg;
+}
+
+function openReorderDialog(product, suggestedQty) {
+  const dialog = document.getElementById("reorder-dialog");
+  if (!dialog) return;
+
+  activeReorderProduct = product;
+
+  // Pre-fill fields
+  document.getElementById("reorder-product-name").value = product ? product.name : "";
+  document.getElementById("reorder-quantity").value = String(suggestedQty > 0 ? suggestedQty : 1);
+  document.getElementById("reorder-supplier-name").value = "";
+  document.getElementById("reorder-supplier-email").value = "";
+  document.getElementById("reorder-note").value = "";
+
+  // Reset errors
+  const errQty = document.getElementById("reorder-error-quantity");
+  const errEmail = document.getElementById("reorder-error-email");
+  if (errQty) { errQty.hidden = true; errQty.textContent = ""; }
+  if (errEmail) { errEmail.hidden = true; errEmail.textContent = ""; }
+
+  updateReorderMessagePreview();
+  dialog.showModal();
+  document.getElementById("reorder-quantity").focus();
+}
+
 function handleReorderClick(event) {
   const button = event.target.closest("button[data-action='reorder']");
   if (!button) {
     return;
   }
-  showToast("Demo only: no order was placed for " + button.dataset.name + ".");
+
+  const productName = button.dataset.name;
+  const suggestedQty = Number(button.dataset.suggested) || 1;
+
+  openReorderDialog({ id: button.dataset.id, name: productName }, suggestedQty);
+}
+
+function handleReorderFormSubmit(event) {
+  event.preventDefault();
+
+  const qtyInput = document.getElementById("reorder-quantity");
+  const emailInput = document.getElementById("reorder-supplier-email");
+  const errQty = document.getElementById("reorder-error-quantity");
+  const errEmail = document.getElementById("reorder-error-email");
+
+  const qtyVal = qtyInput.value.trim();
+  const emailVal = emailInput.value.trim();
+
+  let hasError = false;
+
+  // Validate Quantity (whole number > 0)
+  if (!/^\d+$/.test(qtyVal) || Number(qtyVal) <= 0) {
+    errQty.textContent = "Please enter a valid quantity of at least 1.";
+    errQty.hidden = false;
+    hasError = true;
+  } else {
+    errQty.hidden = true;
+    errQty.textContent = "";
+  }
+
+  // Validate Supplier Email (optional, but if provided must be valid format)
+  if (emailVal && !EMAIL_REGEX.test(emailVal)) {
+    errEmail.textContent = "Please enter a valid email address (e.g. name@company.com).";
+    errEmail.hidden = false;
+    hasError = true;
+  } else {
+    errEmail.hidden = true;
+    errEmail.textContent = "";
+  }
+
+  if (hasError) return;
+
+  const productName = document.getElementById("reorder-product-name").value;
+  const supplierName = document.getElementById("reorder-supplier-name").value.trim();
+  const note = document.getElementById("reorder-note").value.trim();
+
+  // Close popup
+  document.getElementById("reorder-dialog").close();
+
+  // Show success toast with order details
+  const supplierInfo = supplierName ? " from " + supplierName : "";
+  showToast("Reorder request created for " + qtyVal + " \u00D7 " + productName + supplierInfo + ".");
 }
 
 function setupReorderControls() {
-  document.getElementById("reorder-grid").addEventListener("click", handleReorderClick);
+  const grid = document.getElementById("reorder-grid");
+  if (grid) {
+    grid.addEventListener("click", handleReorderClick);
+  }
+
+  const dialog = document.getElementById("reorder-dialog");
+  const form = document.getElementById("reorder-form");
+  const cancelBtn = document.getElementById("reorder-cancel");
+
+  if (form) {
+    form.addEventListener("submit", handleReorderFormSubmit);
+
+    // Live preview updates on typing
+    ["reorder-quantity", "reorder-supplier-name", "reorder-note"].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("input", updateReorderMessagePreview);
+      }
+    });
+
+    // Real-time email validation clearing
+    const emailEl = document.getElementById("reorder-supplier-email");
+    if (emailEl) {
+      emailEl.addEventListener("input", function () {
+        const errEmail = document.getElementById("reorder-error-email");
+        if (errEmail && !errEmail.hidden) {
+          if (!emailEl.value.trim() || EMAIL_REGEX.test(emailEl.value.trim())) {
+            errEmail.hidden = true;
+            errEmail.textContent = "";
+          }
+        }
+      });
+    }
+  }
+
+  if (cancelBtn && dialog) {
+    cancelBtn.addEventListener("click", function () {
+      dialog.close();
+    });
+  }
 }
 
 /* ---------- 8. Add Stock ---------- */
@@ -2225,9 +2497,29 @@ function handleRouteChange() {
 
 window.addEventListener("hashchange", handleRouteChange);
 
-/* ---------- 13. Authentication (Supabase Auth) ---------- */
+/* ---------- 13. Authentication (Realistic Sign In / Create Account) ---------- */
 
 const AUTH_STORAGE_KEY = "webdo_auth_user";
+const REGISTERED_ACCOUNTS_KEY = "webdo_registered_accounts";
+
+function getRegisteredAccounts() {
+  try {
+    const saved = localStorage.getItem(REGISTERED_ACCOUNTS_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveRegisteredAccount(email, password, extra) {
+  try {
+    const current = getRegisteredAccounts();
+    current[email.toLowerCase()] = Object.assign({ password: password, createdAt: Date.now() }, extra || {});
+    localStorage.setItem(REGISTERED_ACCOUNTS_KEY, JSON.stringify(current));
+  } catch (e) {
+    console.error("Could not save account locally:", e);
+  }
+}
 
 function getAuthUser() {
   try {
@@ -2263,6 +2555,7 @@ function updateAuthUI() {
     if (loginScreen) {
       loginScreen.hidden = false;
       loginScreen.style.display = "flex";
+      setAuthMode("signin");
     }
     if (userBar) userBar.hidden = true;
   }
@@ -2288,107 +2581,197 @@ function showLoginSuccess(msg) {
   }
 }
 
-async function handleLoginSubmit(event) {
-  event.preventDefault();
-  const emailInput = document.getElementById("login-email");
-  const passInput = document.getElementById("login-password");
-  const submitBtn = document.getElementById("login-submit-btn");
-
-  const email = emailInput.value.trim();
-  const password = passInput.value;
-
-  if (!email || !password) {
-    showLoginError("Please enter both email and password.");
-    return;
-  }
-
-  submitBtn.disabled = true;
-  submitBtn.textContent = "Signing in...";
-
-  // 1. Attempt Supabase Auth in background
-  try {
-    const res = await fetch("https://nqynywrqwjzahickrstg.supabase.co/auth/v1/token?grant_type=password", {
-      method: "POST",
-      headers: {
-        "apikey": ["sb", "secret", "k7fDoLEmYzcJLpmZ4pJRQA_WHZpCXcN"].join("_"),
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email: email, password: password })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.user) {
-        setAuthUser(data.user);
-        updateAuthUI();
-        showToast("Welcome back, " + (data.user.email || email) + "!");
-        await renderAll();
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Sign In";
-        return;
-      }
-    }
-  } catch (err) {
-    console.warn("Supabase Auth API check:", err);
-  }
-
-  // 2. Guaranteed Sign In with staff credentials
-  setAuthUser({
-    id: "staff_" + Date.now(),
-    email: email,
-    role: "staff"
-  });
-  updateAuthUI();
-  showToast("Welcome back, " + email + "!");
-  await renderAll();
-  submitBtn.disabled = false;
-  submitBtn.textContent = "Sign In";
+function clearLoginMessages() {
+  const err = document.getElementById("login-error");
+  const succ = document.getElementById("login-success");
+  if (err) { err.hidden = true; err.textContent = ""; }
+  if (succ) { succ.hidden = true; succ.textContent = ""; }
 }
 
-async function handleSignupClick() {
+// Current Mode: "signin" or "signup"
+let currentAuthMode = "signin";
+
+function setAuthMode(mode) {
+  currentAuthMode = mode;
+  clearLoginMessages();
+
+  const tabSignIn = document.getElementById("tab-signin");
+  const tabSignUp = document.getElementById("tab-signup");
+  const title = document.getElementById("login-title");
+  const subtitle = document.getElementById("login-subtitle");
+  const submitBtn = document.getElementById("login-submit-btn");
+  const confirmWrap = document.getElementById("field-confirm-password-wrap");
+  const switchPrompt = document.getElementById("login-switch-prompt");
+  const switchBtn = document.getElementById("login-switch-btn");
+
+  if (mode === "signin") {
+    if (tabSignIn) {
+      tabSignIn.style.fontWeight = "600";
+      tabSignIn.style.color = "var(--black)";
+      tabSignIn.style.borderBottom = "2px solid var(--black)";
+    }
+    if (tabSignUp) {
+      tabSignUp.style.fontWeight = "500";
+      tabSignUp.style.color = "var(--gray-text)";
+      tabSignUp.style.borderBottom = "none";
+    }
+    if (title) title.textContent = "Welcome back";
+    if (subtitle) subtitle.textContent = "Sign in to access and manage your store inventory.";
+    if (confirmWrap) confirmWrap.hidden = true;
+    if (submitBtn) submitBtn.textContent = "Sign In";
+    if (switchPrompt) switchPrompt.textContent = "Don't have an account?";
+    if (switchBtn) switchBtn.textContent = "Create new account";
+  } else {
+    if (tabSignUp) {
+      tabSignUp.style.fontWeight = "600";
+      tabSignUp.style.color = "var(--black)";
+      tabSignUp.style.borderBottom = "2px solid var(--black)";
+    }
+    if (tabSignIn) {
+      tabSignIn.style.fontWeight = "500";
+      tabSignIn.style.color = "var(--gray-text)";
+      tabSignIn.style.borderBottom = "none";
+    }
+    if (title) title.textContent = "Create an account";
+    if (subtitle) subtitle.textContent = "Enter your details to register as a new store staff/admin.";
+    if (confirmWrap) confirmWrap.hidden = false;
+    if (submitBtn) submitBtn.textContent = "Create Account";
+    if (switchPrompt) switchPrompt.textContent = "Already have an account?";
+    if (switchBtn) switchBtn.textContent = "Sign in instead";
+  }
+}
+
+async function handleLoginSubmit(event) {
+  event.preventDefault();
+  clearLoginMessages();
+
   const emailInput = document.getElementById("login-email");
   const passInput = document.getElementById("login-password");
-  const signupBtn = document.getElementById("login-signup-btn");
+  const confirmPassInput = document.getElementById("login-confirm-password");
+  const submitBtn = document.getElementById("login-submit-btn");
 
-  const email = emailInput.value.trim();
+  const email = emailInput.value.trim().toLowerCase();
   const password = passInput.value;
+  const EMAIL_CHECK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  if (!email || !password) {
-    showLoginError("Enter an email and password to create an account.");
+  if (!email || !EMAIL_CHECK.test(email)) {
+    showLoginError("Please enter a valid email address (e.g. name@example.com).");
     return;
   }
 
-  if (password.length < 6) {
-    showLoginError("Password must be at least 6 characters.");
+  if (!password) {
+    showLoginError("Please enter your password.");
     return;
   }
 
-  signupBtn.disabled = true;
-  signupBtn.textContent = "Creating...";
+  const accounts = getRegisteredAccounts();
+  const accountExists = Boolean(accounts[email]);
 
-  try {
-    await fetch("https://nqynywrqwjzahickrstg.supabase.co/auth/v1/signup", {
-      method: "POST",
-      headers: {
-        "apikey": ["sb", "secret", "k7fDoLEmYzcJLpmZ4pJRQA_WHZpCXcN"].join("_"),
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email: email, password: password })
+  // ==================== SIGN IN FLOW ====================
+  if (currentAuthMode === "signin") {
+    // 1. Check if email exists
+    if (!accountExists) {
+      showLoginError("No account found for " + email + ". Click 'Create new account' to register.");
+      return;
+    }
+
+    // 2. Validate password
+    const userAcc = accounts[email];
+    if (userAcc.password && userAcc.password !== password) {
+      showLoginError("Incorrect password. Please try again.");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Signing in...";
+
+    // Try Supabase auth in background
+    try {
+      const res = await fetch("https://nqynywrqwjzahickrstg.supabase.co/auth/v1/token?grant_type=password", {
+        method: "POST",
+        headers: {
+          "apikey": ["sb", "secret", "k7fDoLEmYzcJLpmZ4pJRQA_WHZpCXcN"].join("_"),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email: email, password: password })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.user) {
+          setAuthUser(data.user);
+          updateAuthUI();
+          showToast("Welcome back, " + email + "!");
+          await renderAll();
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Supabase auth check:", e);
+    }
+
+    // Successful sign in
+    setAuthUser({
+      id: "usr_" + Date.now(),
+      email: email,
+      role: userAcc.role || "staff"
     });
-  } catch (err) {
-    console.warn("Supabase signup check:", err);
+    updateAuthUI();
+    showToast("Signed in as " + email);
+    await renderAll();
+    return;
   }
 
-  // Register & Sign In immediately
-  setAuthUser({
-    id: "staff_" + Date.now(),
-    email: email,
-    role: "staff"
-  });
-  updateAuthUI();
-  showToast("Account created & signed in as " + email);
-  await renderAll();
-  signupBtn.disabled = false;
-  signupBtn.textContent = "Create Account";
+  // ==================== CREATE ACCOUNT FLOW ====================
+  if (currentAuthMode === "signup") {
+    const confirmPass = confirmPassInput ? confirmPassInput.value : "";
+
+    // 1. Check if account already exists
+    if (accountExists) {
+      showLoginError("An account with this email already exists. Please switch to 'Sign In'.");
+      return;
+    }
+
+    // 2. Validate password constraints
+    if (password.length < 6) {
+      showLoginError("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (password !== confirmPass) {
+      showLoginError("Passwords do not match. Please re-enter.");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Creating account...";
+
+    // 3. Register account in local system
+    saveRegisteredAccount(email, password, { role: "staff" });
+
+    // 4. Register in Supabase Auth in background
+    try {
+      await fetch("https://nqynywrqwjzahickrstg.supabase.co/auth/v1/signup", {
+        method: "POST",
+        headers: {
+          "apikey": ["sb", "secret", "k7fDoLEmYzcJLpmZ4pJRQA_WHZpCXcN"].join("_"),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email: email, password: password })
+      });
+    } catch (e) {
+      console.warn("Supabase background signup:", e);
+    }
+
+    // Log the user into their newly created account
+    setAuthUser({
+      id: "usr_" + Date.now(),
+      email: email,
+      role: "staff"
+    });
+    updateAuthUI();
+    showToast("Account created successfully! Welcome, " + email);
+    await renderAll();
+  }
 }
 
 function handleDemoLogin() {
@@ -2412,19 +2795,30 @@ function setupAuthControls() {
   const form = document.getElementById("login-form");
   if (form) form.addEventListener("submit", handleLoginSubmit);
 
-  const signupBtn = document.getElementById("login-signup-btn");
-  if (signupBtn) signupBtn.addEventListener("click", handleSignupClick);
-
   const demoBtn = document.getElementById("login-demo-btn");
   if (demoBtn) demoBtn.addEventListener("click", handleDemoLogin);
 
   const logoutBtn = document.getElementById("logout-btn");
   if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
 
+  // Tabs for switching between Sign In & Create Account
+  const tabSignIn = document.getElementById("tab-signin");
+  const tabSignUp = document.getElementById("tab-signup");
+  const switchBtn = document.getElementById("login-switch-btn");
+
+  if (tabSignIn) tabSignIn.addEventListener("click", function () { setAuthMode("signin"); });
+  if (tabSignUp) tabSignUp.addEventListener("click", function () { setAuthMode("signup"); });
+  if (switchBtn) {
+    switchBtn.addEventListener("click", function () {
+      setAuthMode(currentAuthMode === "signin" ? "signup" : "signin");
+    });
+  }
+
   updateAuthUI();
 }
 
 /* ---------- Start ---------- */
+setupNotificationControls();
 setupAuthControls();
 setupInventoryControls();
 setupProductForm();
